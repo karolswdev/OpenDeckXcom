@@ -43,11 +43,18 @@ private:
 	TextButton *_btnNewGame, *_btnNewBattle, *_btnLoad, *_btnOptions, *_btnMods, *_btnQuit;
 	Window *_window;
 	Text *_txtTitle;
+	TextButton* _focusedButton;
+	std::vector<TextButton*> _navigableButtons;
+
+	/// Sets the currently focused button and updates its visual state.
+	void setFocusedButton(TextButton* button);
 public:
 	/// Creates the Main Menu state.
 	MainMenuState();
 	/// Cleans up the Main Menu state.
 	~MainMenuState();
+	/// Handles any events.
+	virtual void handle(Action *action);
 	/// Handler for clicking the New Game button.
 	void btnNewGameClick(Action *action);
 	/// Handler for clicking the New Battle button.

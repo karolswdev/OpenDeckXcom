@@ -155,6 +155,219 @@ OptionsGeoscapeState::OptionsGeoscapeState(OptionsOrigin origin) : OptionsBaseSt
 	_btnShowFunds->setTooltip("STR_SHOW_FUNDS_DESC");
 	_btnShowFunds->onMouseIn((ActionHandler)&OptionsGeoscapeState::txtTooltipIn);
 	_btnShowFunds->onMouseOut((ActionHandler)&OptionsGeoscapeState::txtTooltipOut);
+
+	// Populate navigable controls
+	_navigableControls.push_back(_slrScrollSpeed);
+	_navigableControls.push_back(_slrClockSpeed);
+	_navigableControls.push_back(_cbxDragScroll);
+	_navigableControls.push_back(_slrDogfightSpeed);
+	_navigableControls.push_back(_btnGlobeCountries);
+	_navigableControls.push_back(_btnGlobeRadars);
+	_navigableControls.push_back(_btnGlobePaths);
+	_navigableControls.push_back(_btnShowFunds);
+	// OK, Cancel, Default buttons are not part of this cycle for now.
+
+	_focusedControl = nullptr;
+	_focusedIndex = -1;
+}
+
+/**
+ * Initializes UI colors according to origin and sets up initial focus.
+ */
+void OptionsGeoscapeState::init()
+{
+	OptionsBaseState::init();
+
+	_focusedIndex = -1;
+	_focusedControl = nullptr;
+	for (size_t i = 0; i < _navigableControls.size(); ++i)
+	{
+		if (_navigableControls[i] && _navigableControls[i]->getVisible() && _navigableControls[i]->getEnabled())
+		{
+			_focusedIndex = i;
+			setFocusOn(_navigableControls[i]);
+			break;
+		}
+	}
+}
+
+/**
+ * Sets the visual state of a control based on focus.
+ * @param control The control.
+ * @param focused Whether it's gaining or losing focus.
+ */
+void OptionsGeoscapeState::setFocusedControlVisuals(InteractiveSurface* control, bool focused)
+{
+    if (!control) return;
+
+    ToggleTextButton* ttb = dynamic_cast<ToggleTextButton*>(control);
+    ComboBox* cb = dynamic_cast<ComboBox*>(control);
+    Slider* sl = dynamic_cast<Slider*>(control);
+
+    if (ttb) ttb->setDown(focused);
+    else if (cb) cb->setFocused(focused);
+    else if (sl) { /* Slider focus visual (e.g., internal button) currently not explicit */ }
+    
+    control->setHasFocus(focused);
+}
+
+/**
+ * Sets focus to a specific control.
+ * @param control The control to focus.
+ */
+void OptionsGeoscapeState::setFocusOn(InteractiveSurface* control)
+{
+    if (_focusedControl && _focusedControl != control) {
+        setFocusedControlVisuals(_focusedControl, false);
+    }
+    
+    _focusedControl = control;
+    _focusedIndex = -1;
+    if (_focusedControl) {
+        for(size_t i=0; i < _navigableControls.size(); ++i) {
+            if (_navigableControls[i] == _focusedControl) {
+                _focusedIndex = i;
+                break;
+            }
+        }
+        setFocusedControlVisuals(_focusedControl, true);
+    }
+}
+
+/**
+ * Cycles focus to the next or previous control.
+ * @param forward True to cycle forward, false for backward.
+ */
+void OptionsGeoscapeState::cycleFocus(bool forward)
+{
+	if (_navigableControls.empty()) return;
+
+	int startIndex = (_focusedIndex == -1 && forward) ? _navigableControls.size() - 1 : _focusedIndex;
+	if (_focusedIndex == -1 && !forward) startIndex = 0;
+	
+	int newIndex = startIndex;
+	int attempts = 0; 
+
+	do {
+		if (forward)
+		{
+			newIndex = (newIndex + 1) % _navigableControls.size();
+		}
+		else
+		{
+			newIndex = (newIndex - 1 + _navigableControls.size()) % _navigableControls.size();
+		}
+		attempts++;
+	} while ((!_navigableControls[newIndex] || !_navigableControls[newIndex]->getVisible() || !_navigableControls[newIndex]->getEnabled()) && attempts < (int)_navigableControls.size() * 2);
+
+    if (_navigableControls[newIndex] && _navigableControls[newIndex]->getVisible() && _navigableControls[newIndex]->getEnabled()) {
+        setFocusOn(_navigableControls[newIndex]);
+    } else if (startIndex != -1 && _navigableControls[startIndex] && _navigableControls[startIndex]->getVisible() && _navigableControls[startIndex]->getEnabled()) {
+		setFocusOn(_navigableControls[startIndex]);
+	} else {
+		if(_focusedControl) setFocusedControlVisuals(_focusedControl, false);
+		_focusedControl = nullptr;
+		_focusedIndex = -1;
+	}
+}
+
+/**
+ * Handles any events.
+ * @param action Pointer to an action.
+ */
+void OptionsGeoscapeState::handle(Action *action)
+{
+	bool handled = false;
+
+	ComboBox* openComboBox = nullptr;
+	if (_focusedControl) {
+		openComboBox = dynamic_cast<ComboBox*>(_focusedControl);
+		if (openComboBox && !openComboBox->isOpen()) {
+			openComboBox = nullptr; 
+		}
+	}
+	
+	if (openComboBox) { 
+		TextList* cbList = openComboBox->getList();
+		if (cbList && action->getDetails()->type == SDL_KEYDOWN) {
+			SDLKey sym = action->getDetails()->key.keysym.sym;
+			if (sym == Options::keyMenuUp) {
+				cbList->selectPrevious();
+				handled = true;
+			} else if (sym == Options::keyMenuDown) {
+				cbList->selectNext();
+				handled = true;
+			} else if (sym == Options::keyMenuSelect) {
+				cbList->activateSelected(this); 
+				setFocusOn(openComboBox); 
+				handled = true;
+			} else if (sym == Options::keyMenuCancel) {
+				openComboBox->toggle(this); 
+				setFocusOn(openComboBox); 
+				handled = true;
+			}
+		}
+	} else if (action->getDetails()->type == SDL_KEYDOWN) {
+		SDLKey sym = action->getDetails()->key.keysym.sym;
+		// Define a reasonable step for sliders in this context
+		// For geoScrollSpeed (10-100), dogfightSpeed (20-50), geoClockSpeed (10-250)
+		// A step of 1 for smaller ranges, maybe 5 or 10 for larger ones.
+		// Let's use a generic small step first.
+		int sliderStep = 1; 
+
+
+		if (sym == Options::keyMenuUp) {
+			cycleFocus(false);
+			handled = true;
+		} else if (sym == Options::keyMenuDown) {
+			cycleFocus(true);
+			handled = true;
+		} else if (sym == Options::keyMenuSelect) {
+			if (_focusedControl) {
+				SDL_Event sdlEvent;
+				sdlEvent.type = SDL_MOUSEBUTTONDOWN;
+				sdlEvent.button.button = SDL_BUTTON_LEFT;
+				sdlEvent.button.state = SDL_PRESSED;
+				Action clickAction(&sdlEvent, _game->getScreen()->getXScale(), _game->getScreen()->getYScale(), _game->getScreen()->getTopBlackBand(), _game->getScreen()->getLeftBlackBand());
+				clickAction.setSender(_focusedControl);
+
+				if (_focusedControl == _btnGlobeCountries) btnGlobeCountriesClick(&clickAction);
+				else if (_focusedControl == _btnGlobeRadars) btnGlobeRadarsClick(&clickAction);
+				else if (_focusedControl == _btnGlobePaths) btnGlobePathsClick(&clickAction);
+				else if (_focusedControl == _btnShowFunds) btnShowFundsClick(&clickAction);
+				else if (dynamic_cast<ComboBox*>(_focusedControl)) {
+					((ComboBox*)_focusedControl)->toggle(this);
+				}
+			}
+			handled = true;
+		} else if (sym == Options::keyMenuLeft) {
+			Slider* sl = dynamic_cast<Slider*>(_focusedControl);
+			if (sl) {
+				if (sl == _slrScrollSpeed) sliderStep = 5; // Range 10-100
+				else if (sl == _slrDogfightSpeed) sliderStep = 1; // Range 20-50
+				else if (sl == _slrClockSpeed) sliderStep = 10; // Range 10-250
+				SDL_Event dummyEvent; dummyEvent.type = SDL_USEREVENT; 
+				Action sliderAction(&dummyEvent, 1.0,1.0,0,0);
+				sl->decrement(this, &sliderAction, sliderStep);
+			}
+			handled = true;
+		} else if (sym == Options::keyMenuRight) {
+			Slider* sl = dynamic_cast<Slider*>(_focusedControl);
+			if (sl) {
+				if (sl == _slrScrollSpeed) sliderStep = 5;
+				else if (sl == _slrDogfightSpeed) sliderStep = 1;
+				else if (sl == _slrClockSpeed) sliderStep = 10;
+				SDL_Event dummyEvent; dummyEvent.type = SDL_USEREVENT;
+				Action sliderAction(&dummyEvent, 1.0,1.0,0,0);
+				sl->increment(this, &sliderAction, sliderStep);
+			}
+			handled = true;
+		}
+	}
+
+	if (!handled) {
+		OptionsBaseState::handle(action);
+	}
 }
 
 /**

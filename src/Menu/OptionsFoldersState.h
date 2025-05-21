@@ -32,11 +32,27 @@ class OptionsFoldersState : public OptionsBaseState
 private:
 	Text *_txtDataFolder, *_txtUserFolder, *_txtSaveFolder, *_txtConfigFolder;
 	Text* _txtDataFolderPath1, *_txtDataFolderPath2, *_txtUserFolderPath, *_txtSaveFolderPath, *_txtConfigFolderPath;
+
+	std::vector<InteractiveSurface*> _navigableControls;
+	InteractiveSurface* _focusedControl;
+	int _focusedIndex;
+
+	/// Sets the currently focused control and updates its visual state.
+	void setFocusedControlVisuals(InteractiveSurface* control, bool focused);
+	/// Cycles focus to the next/previous control.
+	void cycleFocus(bool forward);
+	/// Sets the focus to a specific control.
+	void setFocusOn(InteractiveSurface* control);
+
 public:
 	/// Creates the Folders Options state.
 	OptionsFoldersState(OptionsOrigin origin);
 	/// Cleans up the Folders Options state.
 	~OptionsFoldersState();
+	/// Initializes the state (sets up focus).
+	virtual void init();
+	/// Handles any events.
+	virtual void handle(Action *action);
 	/// Handler for opei.
 	void txtClick(Action* action);
 };

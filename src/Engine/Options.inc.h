@@ -17,7 +17,7 @@ OPT SoundFormat preferredSound;
 OPT VideoFormat preferredVideo;
 OPT SDL_GrabMode captureMouse;
 OPT TextWrapping wordwrap;
-OPT SDLKey keyOk, keyCancel, keyScreenshot, keyFps, keyQuickLoad, keyQuickSave;
+OPT SDLKey keyOk, keyCancel, keyScreenshot, keyFps, keyQuickLoad, keyQuickSave, keyMenuUp, keyMenuDown, keyMenuSelect, keyMenuCancel;
 
 // Geoscape options
 OPT int geoClockSpeed, dogfightSpeed, geoScrollSpeed, geoDragScrollButton, geoscapeScale;

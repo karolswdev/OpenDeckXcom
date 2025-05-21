@@ -80,6 +80,10 @@ public:
 	void mouseRelease(Action *action, State *state);
 	/// Hooks an action handler to when the slider changes.
 	void onChange(ActionHandler handler);
+	/// Increments the slider's value.
+	void increment(State* state, Action* action, int step = 1);
+	/// Decrements the slider's value.
+	void decrement(State* state, Action* action, int step = 1);
 };
 
 }

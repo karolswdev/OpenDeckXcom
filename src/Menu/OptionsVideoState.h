@@ -41,20 +41,32 @@ class OptionsVideoState : public OptionsBaseState
 private:
 	static const std::string GL_EXT, GL_FOLDER, GL_STRING;
 
-	InteractiveSurface *_displaySurface;
+	InteractiveSurface *_displaySurface; // This is a container, not directly navigable for focus.
 	Text *_txtDisplayResolution, *_txtDisplayX;
-	TextEdit *_txtDisplayWidth, *_txtDisplayHeight;
+	TextEdit *_txtDisplayWidth, *_txtDisplayHeight; // Navigable
 	ArrowButton *_btnDisplayResolutionUp, *_btnDisplayResolutionDown;
 
 	Text *_txtLanguage, *_txtFilter, *_txtGeoScale, *_txtBattleScale;
 	ComboBox *_cbxLanguage, *_cbxFilter, *_cbxDisplayMode, *_cbxGeoScale, *_cbxBattleScale;
 	Text *_txtMode;
 	Text *_txtOptions;
-	ToggleTextButton *_btnLetterbox, *_btnLockMouse, *_btnRootWindowedMode;
+	ToggleTextButton *_btnLetterbox, *_btnLockMouse, *_btnRootWindowedMode; // Navigable
 
 	SDL_Rect** _res;
 	int _resAmount, _resCurrent;
 	std::vector<std::string> _langs, _filters;
+
+	std::vector<InteractiveSurface*> _navigableControls;
+	InteractiveSurface* _focusedControl;
+	int _focusedIndex;
+
+	/// Sets the currently focused control and updates its visual state.
+	void setFocusedControlVisuals(InteractiveSurface* control, bool focused);
+	/// Cycles focus to the next/previous control.
+	void cycleFocus(bool forward);
+	/// Sets the focus to a specific control.
+	void setFocusOn(InteractiveSurface* control);
+
 
 	std::string ucWords(std::string str);
 	void updateDisplayResolution();
@@ -63,6 +75,8 @@ public:
 	OptionsVideoState(OptionsOrigin origin);
 	/// Cleans up the Options state.
 	~OptionsVideoState();
+	/// Initializes the state (sets up focus).
+	virtual void init();
 	/// Handler for clicking the Next Resolution button.
 	void btnDisplayResolutionUpClick(Action *action);
 	/// Handler for clicking the Previous Resolution button.

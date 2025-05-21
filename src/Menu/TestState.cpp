@@ -35,6 +35,7 @@
 #include "../Interface/NumberText.h"
 #include "../Interface/Slider.h"
 #include "../Interface/ComboBox.h"
+#include "../Tests/TestKeyboardNavigation.h" // Added for keyboard navigation tests
 
 namespace OpenXcom
 {
@@ -115,6 +116,9 @@ TestState::TestState()
 
 	//_game->getMod()->getFont("FONT_BIG")->fix("../../../Big.bmp", 256);
 	//_game->getMod()->getFont("FONT_SMALL")->fix("../../../Small.bmp", 128);
+
+	// Run keyboard navigation tests when TestState is initialized
+	OpenXcom::TestKeyboardNavigation::RunTests();
 }
 
 TestState::~TestState()

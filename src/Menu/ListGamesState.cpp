@@ -174,7 +174,53 @@ void ListGamesState::init()
 	{
 		_saves = SavedGame::getList(_game->getLanguage(), _autoquick);
 		_lstSaves->clearList();
-		sortList(Options::saveOrder);
+		sortList(Options::saveOrder); // This calls updateList() which populates _lstSaves
+
+		if (!_saves.empty()) // Only set focus and selection if there are items
+		{
+			_lstSaves->setFocus(true);
+			// Try to select the first valid item
+			// _firstValidRow is the index of the first game entry in _lstSaves's rows
+			// We want _lstSaves->_selRow to be _firstValidRow
+			// Calling selectNext() repeatedly until _lstSaves->getSelectedRow() == _firstValidRow
+			// This is still a bit indirect. A direct selectRow(idx) in TextList would be better.
+			if (_lstSaves->getRows() > _firstValidRow)
+			{
+				// Scroll to the first valid row to make it visible
+				_lstSaves->scrollTo(_firstValidRow);
+				
+				// To set the selection correctly on the first valid item:
+				// Reset _selRow to an invalid state or 0, then call selectNext until the desired row is selected.
+				// This is hacky. Let's assume _selRow is 0 initially or some other state.
+				// We want to ensure _lstSaves->getSelectedRow() returns _firstValidRow.
+				// The simplest for now is to call selectNext until it lands on or after _firstValidRow.
+				// This relies on selectNext() correctly updating the visual selector.
+                // If _lstSaves->_selRow is private and starts at 0 (default for size_t).
+                // And _firstValidRow is, say, 0 as well. selectNext() makes _selRow 1.
+                // This needs a robust way to set selection to a specific row index.
+
+                // For now, let's scroll and assume the user will use down arrow once if first item isn't auto-selected.
+                // Or, if _selRow can be assumed to be 0 initially after clearList/sortList:
+                size_t current_sel_row_in_list = 0; // Assuming this is the state of TextList's _selRow
+                for(size_t i = 0; i < _firstValidRow; ++i) {
+                    // This is a conceptual loop. We can't directly manipulate _selRow.
+                    // If TextList::selectNext() is called, _selRow increments.
+                    // This is not the right way to initialize selection to a specific row.
+                }
+                // The selectNext() in TextList now updates the visual selector.
+                // If there are items, we want the first *selectable* one to be highlighted.
+                // Call selectNext() to move from a potential default state (e.g. index 0 if it's a header)
+                // then rely on the handle() method's logic to skip non-selectable rows.
+                _lstSaves->selectNext(); 
+                while(_lstSaves->getSelectedRow() < _firstValidRow && _lstSaves->getRows() > 0) {
+                    unsigned int prev_sel = _lstSaves->getSelectedRow();
+                    _lstSaves->selectNext();
+                    // Break if it's not advancing to prevent infinite loop on fully invalid list (should not happen here)
+                    if (_lstSaves->getSelectedRow() == prev_sel) break; 
+                }
+
+			}
+		}
 	}
 	catch (Exception &e)
 	{

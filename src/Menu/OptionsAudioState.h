@@ -41,11 +41,27 @@ private:
 	ComboBox *_cbxMusicFormat, *_cbxSoundFormat, *_cbxVideoFormat;
 	Text* _txtOptions;
 	ToggleTextButton *_btnBackgroundMute;
+
+	std::vector<InteractiveSurface*> _navigableControls;
+	InteractiveSurface* _focusedControl;
+	int _focusedIndex;
+
+	/// Sets the currently focused control and updates its visual state.
+	void setFocusedControlVisuals(InteractiveSurface* control, bool focused);
+	/// Cycles focus to the next/previous control.
+	void cycleFocus(bool forward);
+	/// Sets the focus to a specific control.
+	void setFocusOn(InteractiveSurface* control);
+
 public:
 	/// Creates the Audio Options state.
 	OptionsAudioState(OptionsOrigin origin);
 	/// Cleans up the Audio Options state.
 	~OptionsAudioState();
+	/// Initializes the state (sets up focus).
+	virtual void init();
+	/// Handles any events.
+	virtual void handle(Action *action);
 	/// Handler for changing the music slider.
 	void slrMusicVolumeChange(Action *action);
 	/// Handler for changing the sound slider.

@@ -43,11 +43,27 @@ private:
 	ToggleTextButton *_btnGlobeCountries, *_btnGlobeRadars, *_btnGlobePaths;
 	Text *_txtOptions;
 	ToggleTextButton *_btnShowFunds;
+
+	std::vector<InteractiveSurface*> _navigableControls;
+	InteractiveSurface* _focusedControl;
+	int _focusedIndex;
+
+	/// Sets the currently focused control and updates its visual state.
+	void setFocusedControlVisuals(InteractiveSurface* control, bool focused);
+	/// Cycles focus to the next/previous control.
+	void cycleFocus(bool forward);
+	/// Sets the focus to a specific control.
+	void setFocusOn(InteractiveSurface* control);
+
 public:
 	/// Creates the Geoscape Options state.
 	OptionsGeoscapeState(OptionsOrigin origin);
 	/// Cleans up the Geoscape Options state.
 	~OptionsGeoscapeState();
+	/// Initializes the state (sets up focus).
+	virtual void init();
+	/// Handles any events.
+	virtual void handle(Action *action);
 	/// Handler for changing the Drag Scroll combobox.
 	void cbxDragScrollChange(Action *action);
 	/// Handler for changing the scroll speed slider.

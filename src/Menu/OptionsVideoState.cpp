@@ -318,7 +318,137 @@ OptionsVideoState::OptionsVideoState(OptionsOrigin origin) : OptionsBaseState(or
 	_cbxBattleScale->onMouseIn((ActionHandler)&OptionsVideoState::txtTooltipIn);
 	_cbxBattleScale->onMouseOut((ActionHandler)&OptionsVideoState::txtTooltipOut);
 
+	// Populate navigable controls (order matters for up/down navigation)
+	_navigableControls.push_back(_txtDisplayWidth);
+	_navigableControls.push_back(_txtDisplayHeight);
+	_navigableControls.push_back(_btnDisplayResolutionUp);
+	_navigableControls.push_back(_btnDisplayResolutionDown);
+	_navigableControls.push_back(_cbxDisplayMode);
+	_navigableControls.push_back(_cbxLanguage);
+	_navigableControls.push_back(_cbxFilter);
+	_navigableControls.push_back(_cbxGeoScale);
+	_navigableControls.push_back(_cbxBattleScale);
+	_navigableControls.push_back(_btnLetterbox);
+	_navigableControls.push_back(_btnLockMouse);
+	_navigableControls.push_back(_btnRootWindowedMode);
+	// OK, Cancel, Default buttons from OptionsBaseState are not part of this explicit cycle for now.
+
+	_focusedControl = nullptr;
+	_focusedIndex = -1; 
 }
+
+/**
+ * Initializes UI colors according to origin and sets up initial focus.
+ */
+void OptionsVideoState::init()
+{
+	OptionsBaseState::init(); // Calls State::init() and applies theme
+
+	_focusedIndex = -1; 
+	_focusedControl = nullptr;
+	// Set initial focus to the first visible and enabled control
+	for (size_t i = 0; i < _navigableControls.size(); ++i)
+	{
+		if (_navigableControls[i] && _navigableControls[i]->getVisible() && _navigableControls[i]->getEnabled())
+		{
+			_focusedIndex = i;
+			setFocusOn(_navigableControls[i]);
+			break;
+		}
+	}
+}
+
+/**
+ * Sets the visual state of a control based on focus.
+ * @param control The control.
+ * @param focused Whether it's gaining or losing focus.
+ */
+void OptionsVideoState::setFocusedControlVisuals(InteractiveSurface* control, bool focused)
+{
+    if (!control) return;
+
+    TextButton* tb = dynamic_cast<TextButton*>(control);
+    ToggleTextButton* ttb = dynamic_cast<ToggleTextButton*>(control);
+    ArrowButton* ab = dynamic_cast<ArrowButton*>(control);
+    ComboBox* cb = dynamic_cast<ComboBox*>(control);
+    TextEdit* te = dynamic_cast<TextEdit*>(control);
+
+    // For ToggleTextButton, setDown(true) might make it look permanently pressed.
+    // We only want to change appearance if it's not reflecting its actual toggle state.
+    // However, for simplicity and consistency with TextButton, we use setDown.
+    // If a 'focused' visual state distinct from 'pressed' is needed, these classes would need modification.
+    if (tb) tb->setDown(focused);
+    else if (ttb) ttb->setDown(focused); // This will make it look pressed.
+    else if (ab) ab->setDown(focused);
+    else if (cb) cb->setFocused(focused); 
+    else if (te) te->setFocus(focused); // TextEdit has its own focus visual.
+    
+    control->setHasFocus(focused);
+}
+
+/**
+ * Sets focus to a specific control.
+ * @param control The control to focus.
+ */
+void OptionsVideoState::setFocusOn(InteractiveSurface* control)
+{
+    if (_focusedControl && _focusedControl != control) {
+        setFocusedControlVisuals(_focusedControl, false);
+    }
+    
+    _focusedControl = control;
+    _focusedIndex = -1; // Reset and find
+    if (_focusedControl) {
+        for(size_t i=0; i < _navigableControls.size(); ++i) {
+            if (_navigableControls[i] == _focusedControl) {
+                _focusedIndex = i;
+                break;
+            }
+        }
+        setFocusedControlVisuals(_focusedControl, true);
+    }
+}
+
+/**
+ * Cycles focus to the next or previous control.
+ * @param forward True to cycle forward, false for backward.
+ */
+void OptionsVideoState::cycleFocus(bool forward)
+{
+	if (_navigableControls.empty()) return;
+
+	int startIndex = (_focusedIndex == -1 && forward) ? _navigableControls.size() -1 : _focusedIndex;
+	if (_focusedIndex == -1 && !forward) startIndex = 0;
+
+
+	int newIndex = startIndex;
+	int attempts = 0; // To prevent infinite loop if all are disabled/hidden
+
+	do {
+		if (forward)
+		{
+			newIndex = (newIndex + 1) % _navigableControls.size();
+		}
+		else
+		{
+			newIndex = (newIndex - 1 + _navigableControls.size()) % _navigableControls.size();
+		}
+		attempts++;
+	} while ((!_navigableControls[newIndex] || !_navigableControls[newIndex]->getVisible() || !_navigableControls[newIndex]->getEnabled()) && attempts < (int)_navigableControls.size() * 2);
+
+    if (_navigableControls[newIndex] && _navigableControls[newIndex]->getVisible() && _navigableControls[newIndex]->getEnabled()) {
+        setFocusOn(_navigableControls[newIndex]);
+    } else if (startIndex != -1 && _navigableControls[startIndex] && _navigableControls[startIndex]->getVisible() && _navigableControls[startIndex]->getEnabled()) {
+		// Fallback to current/initial if no other focusable element is found
+		setFocusOn(_navigableControls[startIndex]);
+	} else {
+		// If absolutely nothing is focusable, clear focus.
+		if(_focusedControl) setFocusedControlVisuals(_focusedControl, false);
+		_focusedControl = nullptr;
+		_focusedIndex = -1;
+	}
+}
+
 
 /**
  *
@@ -615,8 +745,79 @@ void OptionsVideoState::resize(int &dX, int &dY)
  */
 void OptionsVideoState::handle(Action *action)
 {
-	State::handle(action);
-	if (action->getDetails()->type == SDL_KEYDOWN && action->getDetails()->key.keysym.sym == SDLK_g && (SDL_GetModState() & KMOD_CTRL) != 0)
+	bool handled = false;
+	
+	// Special handling if a ComboBox is open and focused
+	ComboBox* openComboBox = dynamic_cast<ComboBox*>(_focusedControl);
+	if (openComboBox && openComboBox->isOpen()) {
+		// Let the ComboBox handle the input if it's open
+		// This typically means its internal TextList should process Up/Down/Select/Cancel
+		// We assume the ComboBox's own handle() method or its onKeyboardPress (if set)
+		// will correctly delegate to its list.
+		// If not, more direct calls to openComboBox->getList()->... would be needed here.
+		// For now, we let State::handle pass it to the ComboBox.
+	} 
+	else if (action->getDetails()->type == SDL_KEYDOWN)
+	{
+		SDLKey sym = action->getDetails()->key.keysym.sym;
+
+		if (sym == Options::keyMenuUp)
+		{
+			cycleFocus(false);
+			handled = true;
+		}
+		else if (sym == Options::keyMenuDown)
+		{
+			cycleFocus(true);
+			handled = true;
+		}
+		else if (sym == Options::keyMenuSelect)
+		{
+			if (_focusedControl)
+			{
+				// Simulate a left mouse click action
+				SDL_Event sdlEvent;
+				sdlEvent.type = SDL_MOUSEBUTTONDOWN; 
+				sdlEvent.button.button = SDL_BUTTON_LEFT;
+				sdlEvent.button.state = SDL_PRESSED; 
+				sdlEvent.button.x = _focusedControl->getX() + _focusedControl->getWidth() / 2;
+				sdlEvent.button.y = _focusedControl->getY() + _focusedControl->getHeight() / 2;
+				Action clickAction(&sdlEvent, _game->getScreen()->getXScale(), _game->getScreen()->getYScale(), _game->getScreen()->getTopBlackBand(), _game->getScreen()->getLeftBlackBand());
+				clickAction.setSender(_focusedControl);
+
+				// Dispatch to specific handlers or use a generic click simulation
+				// For TextEdits, select doesn't do much, they primarily respond to text input.
+				// For ComboBox, it should toggle the list.
+				// For Buttons, it should activate them.
+				if (_focusedControl == _btnDisplayResolutionUp) btnDisplayResolutionUpClick(&clickAction);
+				else if (_focusedControl == _btnDisplayResolutionDown) btnDisplayResolutionDownClick(&clickAction);
+				else if (_focusedControl == _btnLetterbox) btnLetterboxClick(&clickAction);
+				else if (_focusedControl == _btnLockMouse) btnLockMouseClick(&clickAction);
+				else if (_focusedControl == _btnRootWindowedMode) btnRootWindowedModeClick(&clickAction);
+				else if (dynamic_cast<ComboBox*>(_focusedControl)) {
+					// ComboBox::handle should manage toggling itself if it receives a click-like action
+					_focusedControl->handle(&clickAction, this); 
+				} else if (dynamic_cast<TextEdit*>(_focusedControl)) {
+					// TextEdit handles its own input via State::handle -> TextEdit::handle
+					// keyMenuSelect doesn't have a special action here.
+				}
+				// Other controls might need their specific handlers called.
+				handled = true; 
+			}
+		}
+		// keyMenuLeft/Right for specific controls like TextEdit (handled by TextEdit itself)
+		// or future Sliders. For now, not explicitly handled here for general cycling.
+	}
+
+	if (!handled)
+	{
+		// Handles keyMenuCancel (from OptionsBaseState), and general input for TextEdit etc.
+		OptionsBaseState::handle(action); 
+	}
+	
+	// Legacy Ctrl+G check - can remain if it doesn't conflict.
+	// Ensure it's not processed if 'handled' is true to avoid double actions.
+	if (!handled && action->getDetails()->type == SDL_KEYDOWN && action->getDetails()->key.keysym.sym == SDLK_g && (SDL_GetModState() & KMOD_CTRL) != 0)
 	{
 		_btnLockMouse->setPressed(Options::captureMouse == SDL_GRAB_ON);
 	}

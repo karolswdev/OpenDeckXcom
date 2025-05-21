@@ -75,6 +75,8 @@ public:
 	void sortDateClick(Action *action);
 	/// disables the sort buttons.
 	void disableSort();
+	/// Handles any events.
+	virtual void handle(Action *action);
 };
 
 }

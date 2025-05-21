@@ -189,6 +189,12 @@ public:
 	size_t getScroll();
 	/// set the scroll depth
 	void scrollTo(size_t scroll);
+	/// Selects the next item in the list.
+	void selectNext();
+	/// Selects the previous item in the list.
+	void selectPrevious();
+	/// Activates the currently selected item.
+	void activateSelected(State *state);
 	/// Attaches this button to a combobox.
 	void setComboBox(ComboBox *comboBox);
 	/// Check for a combobox.

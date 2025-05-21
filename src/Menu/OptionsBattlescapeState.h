@@ -44,11 +44,27 @@ private:
 	ToggleTextButton *_btnArrows, *_btnTuCost;
 	Text *_txtOptions;
 	ToggleTextButton *_btnTooltips, *_btnDeaths;
+
+	std::vector<InteractiveSurface*> _navigableControls;
+	InteractiveSurface* _focusedControl;
+	int _focusedIndex;
+
+	/// Sets the currently focused control and updates its visual state.
+	void setFocusedControlVisuals(InteractiveSurface* control, bool focused);
+	/// Cycles focus to the next/previous control.
+	void cycleFocus(bool forward);
+	/// Sets the focus to a specific control.
+	void setFocusOn(InteractiveSurface* control);
+
 public:
 	/// Creates the Battlescape Options state.
 	OptionsBattlescapeState(OptionsOrigin origin);
 	/// Cleans up the Battlescape Options state.
 	~OptionsBattlescapeState();
+	/// Initializes the state (sets up focus).
+	virtual void init();
+	/// Handles any events.
+	virtual void handle(Action *action);
 	/// Handler for changing the Edge Scroll combobox.
 	void cbxEdgeScrollChange(Action *action);
 	/// Handler for changing the Drag Scroll combobox.

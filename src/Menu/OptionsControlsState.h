@@ -50,6 +50,8 @@ public:
 	~OptionsControlsState();
 	/// Fills controls list.
 	void init();
+	/// Handles any events.
+	void handle(Action *action);
 	/// Handler for clicking the Controls list.
 	void lstControlsClick(Action *action);
 	/// Handler for pressing a key in the Controls list.

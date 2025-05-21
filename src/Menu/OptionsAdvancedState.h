@@ -52,7 +52,8 @@ public:
 	void lstOptionsMouseOver(Action *action);
 	/// Handler for moving the mouse outside the settings.
 	void lstOptionsMouseOut(Action *action);
-
+	/// Handles any events.
+	virtual void handle(Action *action);
 };
 
 }

@@ -108,6 +108,156 @@ OptionsFoldersState::OptionsFoldersState(OptionsOrigin origin) : OptionsBaseStat
 	_txtConfigFolderPath->onMouseIn((ActionHandler)&OptionsFoldersState::txtTooltipIn);
 	_txtConfigFolderPath->onMouseOut((ActionHandler)&OptionsFoldersState::txtTooltipOut);
 	_txtConfigFolderPath->onMouseClick((ActionHandler)&OptionsFoldersState::txtClick);
+
+	// Populate navigable controls
+	_navigableControls.push_back(_txtDataFolderPath1);
+	_navigableControls.push_back(_txtDataFolderPath2);
+	_navigableControls.push_back(_txtUserFolderPath);
+	_navigableControls.push_back(_txtSaveFolderPath);
+	_navigableControls.push_back(_txtConfigFolderPath);
+	// OK, Cancel, Default buttons are not part of this cycle for now.
+
+	_focusedControl = nullptr;
+	_focusedIndex = -1;
+}
+
+/**
+ * Initializes UI colors according to origin and sets up initial focus.
+ */
+void OptionsFoldersState::init()
+{
+	OptionsBaseState::init();
+
+	_focusedIndex = -1;
+	_focusedControl = nullptr;
+	for (size_t i = 0; i < _navigableControls.size(); ++i)
+	{
+		if (_navigableControls[i] && _navigableControls[i]->getVisible() && _navigableControls[i]->getEnabled())
+		{
+			_focusedIndex = i;
+			setFocusOn(_navigableControls[i]);
+			break;
+		}
+	}
+}
+
+/**
+ * Sets the visual state of a control based on focus.
+ * @param control The control.
+ * @param focused Whether it's gaining or losing focus.
+ */
+void OptionsFoldersState::setFocusedControlVisuals(InteractiveSurface* control, bool focused)
+{
+    if (!control) return;
+    // Text objects don't have a standard 'down' or 'focused' visual state like buttons.
+    // We can try changing their color, but this requires knowing their original color to revert.
+    // For now, we'll just use the base InteractiveSurface::setHasFocus().
+    // A more advanced implementation might involve a temporary border or color change.
+    Text* textControl = dynamic_cast<Text*>(control);
+    if (textControl) {
+        // Example: if (focused) textControl->setColor(NEW_FOCUS_COLOR);
+        // else textControl->setColor(ORIGINAL_COLOR);
+        // This needs original color storage and appropriate focus color.
+        // For now, no explicit visual change beyond what setHasFocus might enable.
+    }
+    control->setHasFocus(focused);
+}
+
+/**
+ * Sets focus to a specific control.
+ * @param control The control to focus.
+ */
+void OptionsFoldersState::setFocusOn(InteractiveSurface* control)
+{
+    if (_focusedControl && _focusedControl != control) {
+        setFocusedControlVisuals(_focusedControl, false);
+    }
+    
+    _focusedControl = control;
+    _focusedIndex = -1;
+    if (_focusedControl) {
+        for(size_t i=0; i < _navigableControls.size(); ++i) {
+            if (_navigableControls[i] == _focusedControl) {
+                _focusedIndex = i;
+                break;
+            }
+        }
+        setFocusedControlVisuals(_focusedControl, true);
+    }
+}
+
+/**
+ * Cycles focus to the next or previous control.
+ * @param forward True to cycle forward, false for backward.
+ */
+void OptionsFoldersState::cycleFocus(bool forward)
+{
+	if (_navigableControls.empty()) return;
+
+	int startIndex = (_focusedIndex == -1 && forward) ? _navigableControls.size() - 1 : _focusedIndex;
+	if (_focusedIndex == -1 && !forward) startIndex = 0;
+	
+	int newIndex = startIndex;
+	int attempts = 0; 
+
+	do {
+		if (forward)
+		{
+			newIndex = (newIndex + 1) % _navigableControls.size();
+		}
+		else
+		{
+			newIndex = (newIndex - 1 + _navigableControls.size()) % _navigableControls.size();
+		}
+		attempts++;
+	} while ((!_navigableControls[newIndex] || !_navigableControls[newIndex]->getVisible() || !_navigableControls[newIndex]->getEnabled()) && attempts < (int)_navigableControls.size() * 2);
+
+    if (_navigableControls[newIndex] && _navigableControls[newIndex]->getVisible() && _navigableControls[newIndex]->getEnabled()) {
+        setFocusOn(_navigableControls[newIndex]);
+    } else if (startIndex != -1 && _navigableControls[startIndex] && _navigableControls[startIndex]->getVisible() && _navigableControls[startIndex]->getEnabled()) {
+		setFocusOn(_navigableControls[startIndex]);
+	} else {
+		if(_focusedControl) setFocusedControlVisuals(_focusedControl, false);
+		_focusedControl = nullptr;
+		_focusedIndex = -1;
+	}
+}
+
+/**
+ * Handles any events.
+ * @param action Pointer to an action.
+ */
+void OptionsFoldersState::handle(Action *action)
+{
+	bool handled = false;
+
+	if (action->getDetails()->type == SDL_KEYDOWN) {
+		SDLKey sym = action->getDetails()->key.keysym.sym;
+
+		if (sym == Options::keyMenuUp) {
+			cycleFocus(false);
+			handled = true;
+		} else if (sym == Options::keyMenuDown) {
+			cycleFocus(true);
+			handled = true;
+		} else if (sym == Options::keyMenuSelect) {
+			if (_focusedControl) {
+				// All navigable controls in this state are Text objects that use txtClick
+				SDL_Event sdlEvent;
+				sdlEvent.type = SDL_MOUSEBUTTONDOWN;
+				sdlEvent.button.button = SDL_BUTTON_LEFT;
+				sdlEvent.button.state = SDL_PRESSED;
+				Action clickAction(&sdlEvent, _game->getScreen()->getXScale(), _game->getScreen()->getYScale(), _game->getScreen()->getTopBlackBand(), _game->getScreen()->getLeftBlackBand());
+				clickAction.setSender(_focusedControl);
+				txtClick(&clickAction); // Call the existing click handler
+			}
+			handled = true;
+		}
+	}
+
+	if (!handled) {
+		OptionsBaseState::handle(action); // Handles keyMenuCancel
+	}
 }
 
 /**
