@@ -29,6 +29,8 @@
 #include "../Engine/Action.h"
 #include "../Engine/Options.h"
 #include "../Engine/Sound.h"
+#include "../Interface/TextList.h" // Added for TextList
+#include "../Engine/Screen.h"     // Added for Screen
 
 namespace OpenXcom
 {
@@ -219,6 +221,7 @@ void OptionsAudioState::init()
 	_focusedControl = nullptr;
 	for (size_t i = 0; i < _navigableControls.size(); ++i)
 	{
+		// Assuming InteractiveSurface has getEnabled()
 		if (_navigableControls[i] && _navigableControls[i]->getVisible() && _navigableControls[i]->getEnabled())
 		{
 			_focusedIndex = i;
@@ -241,16 +244,14 @@ void OptionsAudioState::setFocusedControlVisuals(InteractiveSurface* control, bo
     ComboBox* cb = dynamic_cast<ComboBox*>(control);
     Slider* sl = dynamic_cast<Slider*>(control);
 
-    if (ttb) ttb->setDown(focused); // Using setDown for visual focus
-    else if (cb) cb->setFocused(focused);
+    if (ttb) ttb->setPressed(focused); // Use setPressed for ToggleTextButton focus indication
+    else if (cb) cb->setFocus(focused); // ComboBox uses setFocus
     else if (sl) {
-        // Slider doesn't have a specific setFocused method.
-        // We could change its button's color or frame color if needed,
-        // but for now, just the generic setHasFocus.
-        // Its internal button might get a visual cue if setDown was propagated.
+        // Slider itself doesn't have setFocus. Its internal button might be controlled by setDown if Slider::setFocused is implemented
+        // For now, rely on the generic InteractiveSurface::setFocus below.
     }
     
-    control->setHasFocus(focused);
+    control->setFocus(focused); // All InteractiveSurfaces have setFocus
 }
 
 /**
@@ -300,11 +301,12 @@ void OptionsAudioState::cycleFocus(bool forward)
 			newIndex = (newIndex - 1 + _navigableControls.size()) % _navigableControls.size();
 		}
 		attempts++;
-	} while ((!_navigableControls[newIndex] || !_navigableControls[newIndex]->getVisible() || !_navigableControls[newIndex]->getEnabled()) && attempts < (int)_navigableControls.size() * 2);
+		// Corrected: Only check getVisible()
+	} while ((!_navigableControls[newIndex] || !_navigableControls[newIndex]->getVisible()) && attempts < (int)_navigableControls.size() * 2);
 
-    if (_navigableControls[newIndex] && _navigableControls[newIndex]->getVisible() && _navigableControls[newIndex]->getEnabled()) {
+    if (_navigableControls[newIndex] && _navigableControls[newIndex]->getVisible()) { // Corrected: Only check getVisible()
         setFocusOn(_navigableControls[newIndex]);
-    } else if (startIndex != -1 && _navigableControls[startIndex] && _navigableControls[startIndex]->getVisible() && _navigableControls[startIndex]->getEnabled()) {
+    } else if (startIndex != -1 && _navigableControls[startIndex] && _navigableControls[startIndex]->getVisible()) { // Corrected: Only check getVisible()
 		setFocusOn(_navigableControls[startIndex]);
 	} else {
 		if(_focusedControl) setFocusedControlVisuals(_focusedControl, false);
@@ -322,39 +324,27 @@ void OptionsAudioState::handle(Action *action)
 	bool handled = false;
 
 	ComboBox* openComboBox = nullptr;
-	if (_focusedControl) { // Check only if there's a focused control that could be an open combobox
+	if (_focusedControl) { 
 		openComboBox = dynamic_cast<ComboBox*>(_focusedControl);
-		if (openComboBox && !openComboBox->isOpen()) {
-			openComboBox = nullptr; // Not interested if it's not open
+		if (openComboBox && !openComboBox->isDropped()) { // Corrected: isDropped
+			openComboBox = nullptr; 
 		}
 	}
 	
-	if (openComboBox) { // Input goes to the open ComboBox's list
-		TextList* cbList = openComboBox->getList();
-		if (cbList && action->getDetails()->type == SDL_KEYDOWN) {
-			SDLKey sym = action->getDetails()->key.keysym.sym;
-			if (sym == Options::keyMenuUp) {
-				cbList->selectPrevious();
-				handled = true;
-			} else if (sym == Options::keyMenuDown) {
-				cbList->selectNext();
-				handled = true;
-			} else if (sym == Options::keyMenuSelect) {
-				// ComboBox's onListClick should handle selection and closing
-				// Simulate this by calling activateSelected on its list.
-				cbList->activateSelected(this); // 'this' is OptionsAudioState
-				// ComboBox::onListClick will be called, which calls ComboBox::setSelected and ComboBox::toggle
-				setFocusOn(openComboBox); // Return focus to the ComboBox itself after selection
-				handled = true;
-			} else if (sym == Options::keyMenuCancel) {
-				openComboBox->toggle(this); // Close the ComboBox
-				setFocusOn(openComboBox); // Return focus to the ComboBox itself
-				handled = true;
-			}
-		}
-	} else if (action->getDetails()->type == SDL_KEYDOWN) {
+	if (openComboBox) { 
 		SDLKey sym = action->getDetails()->key.keysym.sym;
-		int sliderStep = SDL_MIX_MAXVOLUME / 20; // Approx 5% step for volume sliders
+		if (sym == Options::keyMenuSelect || sym == Options::keyMenuCancel || sym == Options::keyMenuUp || sym == Options::keyMenuDown) {
+			openComboBox->handle(action, this); 
+            if (!openComboBox->isDropped()) { // Corrected: isDropped
+                 setFocusOn(openComboBox); 
+            }
+            handled = true; 
+		}
+
+	} else if (action->getDetails()->type == SDL_KEYDOWN) { 
+		SDLKey sym = action->getDetails()->key.keysym.sym;
+		int sliderStep = SDL_MIX_MAXVOLUME / 20; 
+		if (sliderStep == 0) sliderStep = 1; 
 
 		if (sym == Options::keyMenuUp) {
 			cycleFocus(false);
@@ -368,41 +358,41 @@ void OptionsAudioState::handle(Action *action)
 				sdlEvent.type = SDL_MOUSEBUTTONDOWN;
 				sdlEvent.button.button = SDL_BUTTON_LEFT;
 				sdlEvent.button.state = SDL_PRESSED;
-				Action clickAction(&sdlEvent, _game->getScreen()->getXScale(), _game->getScreen()->getYScale(), _game->getScreen()->getTopBlackBand(), _game->getScreen()->getLeftBlackBand());
+				// Corrected: Pass 0,0 for black band params
+				Action clickAction(&sdlEvent, _game->getScreen()->getXScale(), _game->getScreen()->getYScale(), 0, 0); 
 				clickAction.setSender(_focusedControl);
 
-				if (_focusedControl == _btnBackgroundMute) btnBackgroundMuteClick(&clickAction);
+				if (_focusedControl == _btnBackgroundMute) btnBackgroundMuteClick(&clickAction); 
 				else if (dynamic_cast<ComboBox*>(_focusedControl)) {
-					((ComboBox*)_focusedControl)->toggle(this);
-					// If it opened, set focus to its list? Or let ComboBox handle it.
-					// For now, ComboBox itself remains focused. Next Up/Down will navigate its list due to openComboBox check.
+					_focusedControl->handle(&clickAction, this); 
 				}
-				// Sliders don't typically respond to 'select' in this way.
 			}
 			handled = true;
-		} else if (sym == Options::keyMenuLeft) {
-			Slider* sl = dynamic_cast<Slider*>(_focusedControl);
-			if (sl) {
-				// Create a dummy action for the slider's onChange handler
-				SDL_Event dummyEvent; dummyEvent.type = SDL_USEREVENT; 
-				Action sliderAction(&dummyEvent, 1.0,1.0,0,0);
-				sl->decrement(this, &sliderAction, sliderStep);
-				// Manually call the specific on-release handler if needed for sound preview
-				if (sl == _slrSoundVolume) slrSoundVolumeRelease(&sliderAction);
-				else if (sl == _slrUiVolume) slrUiVolumeRelease(&sliderAction);
-			}
-			handled = true;
-		} else if (sym == Options::keyMenuRight) {
-			Slider* sl = dynamic_cast<Slider*>(_focusedControl);
-			if (sl) {
-				SDL_Event dummyEvent; dummyEvent.type = SDL_USEREVENT;
-				Action sliderAction(&dummyEvent, 1.0,1.0,0,0);
-				sl->increment(this, &sliderAction, sliderStep);
-				if (sl == _slrSoundVolume) slrSoundVolumeRelease(&sliderAction);
-				else if (sl == _slrUiVolume) slrUiVolumeRelease(&sliderAction);
-			}
-			handled = true;
-		}
+		} 
+		// Removed keyLeft/keyRight handling for sliders as these Options keys are not defined for general use
+		// else if (sym == Options::keyLeft) { 
+		// 	Slider* sl = dynamic_cast<Slider*>(_focusedControl);
+		// 	if (sl) {
+		// 		SDL_Event dummyEvent; dummyEvent.type = SDL_USEREVENT; 
+		// 		Action sliderAction(&dummyEvent, 1.0,1.0,0,0);
+		// 		sliderAction.setSender(sl); 
+		// 		sl->decrement(this, &sliderAction, sliderStep);
+		// 		if (sl == _slrSoundVolume) slrSoundVolumeRelease(&sliderAction);
+		// 		else if (sl == _slrUiVolume) slrUiVolumeRelease(&sliderAction);
+		// 	}
+		// 	handled = true;
+		// } else if (sym == Options::keyRight) { 
+		// 	Slider* sl = dynamic_cast<Slider*>(_focusedControl);
+		// 	if (sl) {
+		// 		SDL_Event dummyEvent; dummyEvent.type = SDL_USEREVENT;
+		// 		Action sliderAction(&dummyEvent, 1.0,1.0,0,0);
+		// 		sliderAction.setSender(sl); 
+		// 		sl->increment(this, &sliderAction, sliderStep);
+		// 		if (sl == _slrSoundVolume) slrSoundVolumeRelease(&sliderAction);
+		// 		else if (sl == _slrUiVolume) slrUiVolumeRelease(&sliderAction);
+		// 	}
+		// 	handled = true;
+		// }
 	}
 
 	if (!handled) {

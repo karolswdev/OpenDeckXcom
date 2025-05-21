@@ -1,6 +1,6 @@
 #pragma once
 /*
- * Copyright 2010-2016 OpenXcom Developers.
+ * Copyright 2010-2023 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -18,57 +18,53 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "../Engine/State.h"
+#include <vector> // Required for std::vector
 
-namespace OpenXcom
-{
-
-class TextButton;
-class Window;
-class Text;
+// Forward declarations
+namespace OpenXcom {
+	class TextButton;
+	class Window;
+	class Text;
+	class InteractiveSurface;
+	class Action;
+}
 
 // Utility class for enqueuing a state in the stack that goes to the main menu
-class GoToMainMenuState : public State
+class GoToMainMenuState : public OpenXcom::State // Added OpenXcom::
 {
 public:
-	void init();
+	virtual void init(); // Added virtual
 };
 
 /**
  * Main Menu window displayed when first
  * starting the game.
  */
-class MainMenuState : public State
+class MainMenuState : public OpenXcom::State // Added OpenXcom::
 {
 private:
-	TextButton *_btnNewGame, *_btnNewBattle, *_btnLoad, *_btnOptions, *_btnMods, *_btnQuit;
-	Window *_window;
-	Text *_txtTitle;
-	TextButton* _focusedButton;
-	std::vector<TextButton*> _navigableButtons;
+	OpenXcom::TextButton *_btnNewGame, *_btnNewBattle, *_btnLoad, *_btnOptions, *_btnMods, *_btnQuit;
+	OpenXcom::Window *_window;
+	OpenXcom::Text *_txtTitle;
 
-	/// Sets the currently focused button and updates its visual state.
-	void setFocusedButton(TextButton* button);
+	std::vector<OpenXcom::InteractiveSurface*> _navigableControls;
+	OpenXcom::InteractiveSurface* _focusedControl;
+	int _focusedIndex; 
+
+	void setFocusedControlVisuals(OpenXcom::InteractiveSurface* control, bool focused);
+	void setFocusOn(OpenXcom::InteractiveSurface* control);
+	void cycleFocus(bool forward);
+
 public:
-	/// Creates the Main Menu state.
 	MainMenuState();
-	/// Cleans up the Main Menu state.
 	~MainMenuState();
-	/// Handles any events.
-	virtual void handle(Action *action);
-	/// Handler for clicking the New Game button.
-	void btnNewGameClick(Action *action);
-	/// Handler for clicking the New Battle button.
-	void btnNewBattleClick(Action *action);
-	/// Handler for clicking the Load Saved Game button.
-	void btnLoadClick(Action *action);
-	/// Handler for clicking the Options button.
-	void btnOptionsClick(Action *action);
-	/// Handler for clicking the Mods button.
-	void btnModsClick(Action *action);
-	/// Handler for clicking the Quit button.
-	void btnQuitClick(Action *action);
-	/// Update the resolution settings, we just resized the window.
-	void resize(int &dX, int &dY);
+    virtual void init(); 
+	virtual void handle(OpenXcom::Action *action); 
+	void btnNewGameClick(OpenXcom::Action *action);
+	void btnNewBattleClick(OpenXcom::Action *action);
+	void btnLoadClick(OpenXcom::Action *action);
+	void btnOptionsClick(OpenXcom::Action *action);
+	void btnModsClick(OpenXcom::Action *action);
+	void btnQuitClick(OpenXcom::Action *action);
+	virtual void resize(int &dX, int &dY); // Added virtual
 };
-
-}

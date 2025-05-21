@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2016 OpenXcom Developers.
+ * Copyright 2010-2023 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -29,25 +29,30 @@
 #include "NewGameState.h"
 #include "NewBattleState.h"
 #include "ListLoadState.h"
-#include "OptionsVideoState.h"
+#include "OptionsVideoState.h" // For OptionsOrigin::OPT_MENU
 #include "ModListState.h"
-#include "../Engine/Options.h"
+#include "../Engine/Options.h" // For Options::keyMenuUp, etc.
+#include "../Engine/Action.h"
+#include "../Interface/InteractiveSurface.h"
+
 
 namespace OpenXcom
 {
 
 void GoToMainMenuState::init()
 {
-	Screen::updateScale(Options::geoscapeScale, Options::baseXGeoscape, Options::baseYGeoscape, true);
-	_game->getScreen()->resetDisplay(false);
-	_game->setState(new MainMenuState);
+	if (_game && _game->getScreen()) { // Null check
+        Screen::updateScale(Options::geoscapeScale, Options::baseXGeoscape, Options::baseYGeoscape, true);
+	    _game->getScreen()->resetDisplay(false);
+    }
+	if (_game) _game->setState(new MainMenuState); // Null check
 }
 
 /**
  * Initializes all the elements in the Main Menu window.
  * @param game Pointer to the core game.
  */
-MainMenuState::MainMenuState()
+MainMenuState::MainMenuState() : _focusedControl(nullptr), _focusedIndex(-1)
 {
 	// Create objects
 	_window = new Window(this, 256, 160, 32, 20, POPUP_BOTH);
@@ -100,83 +105,186 @@ MainMenuState::MainMenuState()
 	title << tr("STR_OPENXCOM") << Unicode::TOK_NL_SMALL;
 	title << OPENXCOM_VERSION_SHORT << OPENXCOM_VERSION_GIT;
 	_txtTitle->setText(title.str());
+
+	// Populate navigable controls (simple top-to-bottom, left-to-right order)
+	_navigableControls.push_back(_btnNewGame);
+	_navigableControls.push_back(_btnNewBattle);
+	_navigableControls.push_back(_btnLoad);
+	_navigableControls.push_back(_btnOptions);
+	_navigableControls.push_back(_btnMods);
+	_navigableControls.push_back(_btnQuit);
+	
+    // Initial focus will be set in init()
 }
 
-/**
- *
- */
 MainMenuState::~MainMenuState()
 {
-
+	// _navigableControls only holds pointers, buttons are deleted by State destructor
 }
 
-/**
- * Opens the New Game window.
- * @param action Pointer to an action.
- */
-void MainMenuState::btnNewGameClick(Action *)
+void MainMenuState::init()
 {
-	_game->pushState(new NewGameState);
+    State::init(); // Call base class init if it exists and does something useful
+
+    _focusedIndex = -1; // Reset focus index
+    _focusedControl = nullptr; // Reset focused control
+
+    // Set initial focus to the first visible and enabled control
+    if (!_navigableControls.empty()) // Ensure vector is not empty
+    {
+        for (size_t i = 0; i < _navigableControls.size(); ++i)
+        {
+            if (_navigableControls[i] && _navigableControls[i]->getVisible() && _navigableControls[i]->getEnabled())
+            {
+                setFocusOn(_navigableControls[i]);
+                break;
+            }
+        }
+    }
 }
 
-/**
- * Opens the New Battle screen.
- * @param action Pointer to an action.
- */
-void MainMenuState::btnNewBattleClick(Action *)
+void MainMenuState::setFocusedControlVisuals(InteractiveSurface* control, bool focused)
 {
-	_game->pushState(new NewBattleState);
+    if (!control) return;
+
+    TextButton* tb = dynamic_cast<TextButton*>(control);
+    if (tb)
+    {
+        tb->setPressed(focused); 
+    }    
+    control->setFocus(focused); 
 }
 
-/**
- * Opens the Load Game screen.
- * @param action Pointer to an action.
- */
-void MainMenuState::btnLoadClick(Action *)
+void MainMenuState::setFocusOn(InteractiveSurface* control)
 {
-	_game->pushState(new ListLoadState(OPT_MENU));
+    if (_focusedControl && _focusedControl != control)
+    {
+        setFocusedControlVisuals(_focusedControl, false);
+    }
+    
+    _focusedControl = control;
+    _focusedIndex = -1; 
+    if (_focusedControl)
+    {
+        for(size_t i = 0; i < _navigableControls.size(); ++i)
+        {
+            if (_navigableControls[i] == _focusedControl)
+            {
+                _focusedIndex = i;
+                break;
+            }
+        }
+        setFocusedControlVisuals(_focusedControl, true);
+    }
 }
 
-/**
- * Opens the Options screen.
- * @param action Pointer to an action.
- */
-void MainMenuState::btnOptionsClick(Action *)
+void MainMenuState::cycleFocus(bool forward)
 {
-	Options::backupDisplay();
-	_game->pushState(new OptionsVideoState(OPT_MENU));
+    if (_navigableControls.empty()) return;
+
+    int startIndex = _focusedIndex; // Keep current index if valid
+    if (_focusedIndex == -1) { // If no focus, determine starting point based on direction
+        startIndex = forward ? (_navigableControls.size() - 1) : 0;
+    }
+    
+    int newIndex = startIndex;
+    int attempts = 0; 
+
+    do {
+        if (forward)
+        {
+            newIndex = (newIndex + 1) % _navigableControls.size();
+        }
+        else
+        {
+            newIndex = (newIndex - 1 + _navigableControls.size()) % _navigableControls.size();
+        }
+        attempts++;
+    } while ((!_navigableControls[newIndex] || 
+              !_navigableControls[newIndex]->getVisible() || 
+              !_navigableControls[newIndex]->getEnabled()) && 
+             attempts < (int)_navigableControls.size() * 2); 
+
+    if (_navigableControls[newIndex] && _navigableControls[newIndex]->getVisible() && _navigableControls[newIndex]->getEnabled()) {
+        setFocusOn(_navigableControls[newIndex]);
+    } else if (startIndex != -1 && _navigableControls[startIndex] && _navigableControls[startIndex]->getVisible() && _navigableControls[startIndex]->getEnabled()) {
+        // Fallback to current/start index if no other focusable control is found
+        setFocusOn(_navigableControls[startIndex]);
+    } else {
+        // If still no focusable control, clear focus
+        if(_focusedControl) setFocusedControlVisuals(_focusedControl, false);
+        _focusedControl = nullptr;
+        _focusedIndex = -1;
+    }
 }
 
-/**
-* Opens the Mods screen.
-* @param action Pointer to an action.
-*/
-void MainMenuState::btnModsClick(Action *)
+void MainMenuState::handle(Action *action)
 {
-	_game->pushState(new ModListState);
+	bool handled = false;
+	if (action->getDetails()->type == SDL_KEYDOWN)
+	{
+		SDLKey sym = action->getDetails()->key.keysym.sym;
+
+		if (!_navigableControls.empty()) {
+            // Ensure something is focused if starting with no focus
+            if (_focusedIndex == -1 && !_navigableControls.empty()) { 
+                 for(size_t i=0; i < _navigableControls.size(); ++i) {
+                     if(_navigableControls[i] && _navigableControls[i]->getVisible() && _navigableControls[i]->getEnabled()){
+                         setFocusOn(_navigableControls[i]);
+                         break;
+                     }
+                 }
+            }
+
+			if (sym == Options::keyMenuUp) { cycleFocus(false); handled = true; }
+			else if (sym == Options::keyMenuDown) { cycleFocus(true); handled = true; }
+			// Left/Right navigation removed as Options::keyMenuLeft/Right (or Options::keyLeft/Right) are not defined options
+			else if (sym == Options::keyMenuSelect) {
+				if (_focusedControl) {
+					SDL_Event sdlEvent; sdlEvent.type = SDL_MOUSEBUTTONDOWN; sdlEvent.button.button = SDL_BUTTON_LEFT; sdlEvent.button.state = SDL_PRESSED;
+					sdlEvent.button.x = 0; sdlEvent.button.y = 0;
+					Action clickAction(&sdlEvent, 
+                                       _game->getScreen()->getXScale(), 
+                                       _game->getScreen()->getYScale(), 
+                                       _game->getScreen()->getCursorTopBlackBand(), 
+                                       _game->getScreen()->getCursorLeftBlackBand());
+					clickAction.setSender(_focusedControl); 
+                    TextButton* tb = dynamic_cast<TextButton*>(_focusedControl);
+                    if (tb) { 
+                        if (tb == _btnNewGame) btnNewGameClick(&clickAction);
+                        else if (tb == _btnNewBattle) btnNewBattleClick(&clickAction);
+                        else if (tb == _btnLoad) btnLoadClick(&clickAction);
+                        else if (tb == _btnOptions) btnOptionsClick(&clickAction); 
+                        else if (tb == _btnMods) btnModsClick(&clickAction);     
+                        else if (tb == _btnQuit) btnQuitClick(&clickAction);
+                    }    
+				}
+				handled = true;
+			}
+		}
+		if (sym == Options::keyMenuCancel) {
+			SDL_Event sdlEvent; sdlEvent.type = SDL_MOUSEBUTTONDOWN; Action quitAction(&sdlEvent, 1.0,1.0,0,0); 
+			quitAction.setSender(_btnQuit); 
+			btnQuitClick(&quitAction);
+			handled = true;
+		}
+	}
+	if (!handled) State::handle(action); 
 }
 
-/**
- * Quits the game.
- * @param action Pointer to an action.
- */
-void MainMenuState::btnQuitClick(Action *)
-{
-	_game->quit();
-}
+void MainMenuState::btnNewGameClick(Action *) { if(_game) _game->pushState(new NewGameState); } // Null check
+void MainMenuState::btnNewBattleClick(Action *) { if(_game) _game->pushState(new NewBattleState); } // Null check
+void MainMenuState::btnLoadClick(Action *) { if(_game) _game->pushState(new ListLoadState(OPT_MENU)); } // Null check
+void MainMenuState::btnOptionsClick(Action *) { Options::backupDisplay(); if(_game) _game->pushState(new OptionsVideoState(OPT_MENU)); } // Null check
+void MainMenuState::btnModsClick(Action *) { if(_game) _game->pushState(new ModListState); } // Null check
+void MainMenuState::btnQuitClick(Action *) { if(_game) _game->quit(); } // Null check
 
-/**
- * Updates the scale.
- * @param dX delta of X;
- * @param dY delta of Y;
- */
-void MainMenuState::resize(int &dX, int &dY)
-{
-	dX = Options::baseXResolution;
-	dY = Options::baseYResolution;
-	Screen::updateScale(Options::geoscapeScale, Options::baseXGeoscape, Options::baseYGeoscape, true);
-	dX = Options::baseXResolution - dX;
-	dY = Options::baseYResolution - dY;
+void MainMenuState::resize(int &dX, int &dY) {
+	dX = Options::baseXResolution; dY = Options::baseYResolution;
+	if (_game && _game->getScreen()) { // Null checks
+		Screen::updateScale(Options::geoscapeScale, Options::baseXGeoscape, Options::baseYGeoscape, true);
+		dX = Options::baseXResolution - dX; dY = Options::baseYResolution - dY;
+	} else { dX = 0; dY = 0; }
 	State::resize(dX, dY);
 }
 

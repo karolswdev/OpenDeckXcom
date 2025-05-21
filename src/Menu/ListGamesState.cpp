@@ -38,7 +38,7 @@
 namespace OpenXcom
 {
 
-struct compareSaveName : public std::binary_function<SaveInfo&, SaveInfo&, bool>
+struct compareSaveName
 {
 	bool _reverse;
 
@@ -57,7 +57,7 @@ struct compareSaveName : public std::binary_function<SaveInfo&, SaveInfo&, bool>
 	}
 };
 
-struct compareSaveTimestamp : public std::binary_function<SaveInfo&, SaveInfo&, bool>
+struct compareSaveTimestamp
 {
 	bool _reverse;
 
@@ -201,7 +201,7 @@ void ListGamesState::init()
 
                 // For now, let's scroll and assume the user will use down arrow once if first item isn't auto-selected.
                 // Or, if _selRow can be assumed to be 0 initially after clearList/sortList:
-                size_t current_sel_row_in_list = 0; // Assuming this is the state of TextList's _selRow
+                // size_t current_sel_row_in_list = 0; // Assuming this is the state of TextList's _selRow // REMOVED
                 for(size_t i = 0; i < _firstValidRow; ++i) {
                     // This is a conceptual loop. We can't directly manipulate _selRow.
                     // If TextList::selectNext() is called, _selRow increments.
