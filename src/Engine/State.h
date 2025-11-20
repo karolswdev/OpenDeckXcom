@@ -55,6 +55,8 @@ protected:
 
 	SDL_Color _palette[256];
 	Uint8 _cursorColor;
+	InteractiveSurface *_focusedSurface;
+	bool _enableKeyboardNavigation;
 public:
 	/// Creates a new state linked to a game.
 	State();
@@ -112,6 +114,8 @@ public:
 	virtual void resize(int &dX, int &dY);
 	/// Re-orients all the surfaces in the state.
 	virtual void recenter(int dX, int dY);
+	/// Handles keyboard navigation.
+	void handleNavigation(Action *action);
 };
 
 }

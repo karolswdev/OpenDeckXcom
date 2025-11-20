@@ -115,6 +115,9 @@ namespace OpenXcom
  */
 GeoscapeState::GeoscapeState() : _pause(false), _zoomInEffectDone(false), _zoomOutEffectDone(false), _minimizedDogfights(0)
 {
+	// Disable generic keyboard navigation because we use arrows for globe rotation
+	_enableKeyboardNavigation = false;
+
 	int screenWidth = Options::baseXGeoscape;
 	int screenHeight = Options::baseYGeoscape;
 

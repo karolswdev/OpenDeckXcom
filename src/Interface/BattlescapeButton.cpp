@@ -207,6 +207,11 @@ void BattlescapeButton::blit(Surface *surface)
 	else
 	{
 		Surface::blit(surface);
+		// Visual feedback for focus (simple rectangle)
+		if (isFocused())
+		{
+			surface->drawRect(getX(), getY(), getWidth(), getHeight(), 255); // White border
+		}
 	}
 }
 
