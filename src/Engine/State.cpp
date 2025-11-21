@@ -18,6 +18,7 @@
  */
 #include "State.h"
 #include <climits>
+#include <cmath>
 #include "InteractiveSurface.h"
 #include "Game.h"
 #include "Screen.h"
@@ -48,7 +49,7 @@ Game* State::_game = 0;
  * By default states are full-screen.
  * @param game Pointer to the core game.
  */
-State::State() : _screen(true), _modal(0), _ruleInterface(0), _ruleInterfaceParent(0)
+State::State() : _screen(true), _modal(0), _ruleInterface(0), _ruleInterfaceParent(0), _focusedSurface(0), _enableKeyboardNavigation(true)
 {
 	// initialize palette to all black
 	memset(_palette, 0, sizeof(_palette));
@@ -281,6 +282,8 @@ void State::think()
  */
 void State::handle(Action *action)
 {
+	handleNavigation(action);
+
 	if (!_modal)
 	{
 		for (std::vector<Surface*>::reverse_iterator i = _surfaces.rbegin(); i != _surfaces.rend(); ++i)
@@ -553,6 +556,103 @@ void State::recenter(int dX, int dY)
 void State::setGamePtr(Game* game)
 {
 	_game = game;
+}
+
+/**
+ * Handles keyboard navigation between InteractiveSurfaces.
+ * @param action Pointer to an action.
+ */
+void State::handleNavigation(Action *action)
+{
+	if (!_enableKeyboardNavigation || action->getDetails()->type != SDL_KEYDOWN)
+	{
+		return;
+	}
+
+	// Confirm/Cancel logic can go here if needed, but usually handled by onKeyboardPress hooks in surfaces.
+	// We are interested in directional navigation.
+	int dx = 0, dy = 0;
+	switch (action->getDetails()->key.keysym.sym)
+	{
+	case SDLK_UP:    dy = -1; break;
+	case SDLK_DOWN:  dy = 1; break;
+	case SDLK_LEFT:  dx = -1; break;
+	case SDLK_RIGHT: dx = 1; break;
+	default: return;
+	}
+
+	// Ensure we have a valid focused surface
+	if (_focusedSurface == 0 || !_focusedSurface->getVisible())
+	{
+		_focusedSurface = 0;
+		for (std::vector<Surface*>::iterator i = _surfaces.begin(); i != _surfaces.end(); ++i)
+		{
+			InteractiveSurface *s = dynamic_cast<InteractiveSurface*>(*i);
+			if (s && s->getVisible())
+			{
+				_focusedSurface = s;
+				break;
+			}
+		}
+		if (_focusedSurface)
+		{
+			_focusedSurface->setFocus(true);
+		}
+		else
+		{
+			return;
+		}
+	}
+
+	if (dx == 0 && dy == 0) return;
+
+	// Find best candidate
+	InteractiveSurface *bestCandidate = 0;
+	double bestDist = 1e9;
+
+	int cx = _focusedSurface->getX() + _focusedSurface->getWidth() / 2;
+	int cy = _focusedSurface->getY() + _focusedSurface->getHeight() / 2;
+
+	for (std::vector<Surface*>::iterator i = _surfaces.begin(); i != _surfaces.end(); ++i)
+	{
+		InteractiveSurface *s = dynamic_cast<InteractiveSurface*>(*i);
+		if (s == 0 || s == _focusedSurface || !s->getVisible()) continue;
+
+		int sx = s->getX() + s->getWidth() / 2;
+		int sy = s->getY() + s->getHeight() / 2;
+
+		// Check direction
+		if (dx > 0 && sx <= cx) continue;
+		if (dx < 0 && sx >= cx) continue;
+		if (dy > 0 && sy <= cy) continue;
+		if (dy < 0 && sy >= cy) continue;
+
+		// Calculate distance score
+		// Weight primary axis more
+		double dist = 0;
+		if (dx != 0)
+		{
+			dist = (sx - cx) * (sx - cx) + (sy - cy) * (sy - cy) * 2;
+		}
+		else
+		{
+			dist = (sx - cx) * (sx - cx) * 2 + (sy - cy) * (sy - cy);
+		}
+
+		if (dist < bestDist)
+		{
+			bestDist = dist;
+			bestCandidate = s;
+		}
+	}
+
+	if (bestCandidate)
+	{
+		_focusedSurface->setFocus(false);
+		_focusedSurface = bestCandidate;
+		_focusedSurface->setFocus(true);
+		// Simulate hover effect? Handled by isFocused() in draw().
+	}
 }
 
 }

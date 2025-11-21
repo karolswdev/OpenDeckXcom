@@ -269,6 +269,13 @@ void TextButton::draw()
 			this->invert(_color + 3 * mul);
 		}
 	}
+	// Visual feedback for focus
+	else if (isFocused())
+	{
+		// Light inversion to show selection without pressing
+		this->invert(_color + 1 * mul);
+	}
+
 	_text->setInvert(press);
 
 	_text->blit(this);

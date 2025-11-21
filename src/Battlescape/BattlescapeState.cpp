@@ -79,8 +79,11 @@ namespace OpenXcom
  * Initializes all the elements in the Battlescape screen.
  * @param game Pointer to the core game.
  */
-BattlescapeState::BattlescapeState() : _reserve(0), _firstInit(true), _isMouseScrolling(false), _isMouseScrolled(false), _xBeforeMouseScrolling(0), _yBeforeMouseScrolling(0), _totalMouseMoveX(0), _totalMouseMoveY(0), _mouseMovedOverThreshold(0), _mouseOverIcons(false), _autosave(false)
+BattlescapeState::BattlescapeState() : _reserve(0), _firstInit(true), _isMouseScrolling(false), _isMouseScrolled(false), _xBeforeMouseScrolling(0), _yBeforeMouseScrolling(0), _totalMouseMoveX(0), _totalMouseMoveY(0), _mouseMovedOverThreshold(0), _mouseOverIcons(false), _autosave(false),
+	_keyScrollUp(false), _keyScrollDown(false), _keyScrollLeft(false), _keyScrollRight(false)
 {
+	// Disable generic keyboard navigation because we use arrows for scrolling
+	_enableKeyboardNavigation = false;
 	std::fill_n(_visibleUnit, 10, (BattleUnit*)(0));
 
 	const int screenWidth = Options::baseXResolution;
@@ -566,6 +569,16 @@ void BattlescapeState::think()
 	{
 		if (_popups.empty())
 		{
+			int dx = 0, dy = 0;
+			if (_keyScrollUp) dy += Options::battleScrollSpeed;
+			if (_keyScrollDown) dy -= Options::battleScrollSpeed;
+			if (_keyScrollLeft) dx += Options::battleScrollSpeed;
+			if (_keyScrollRight) dx -= Options::battleScrollSpeed;
+			if (dx || dy)
+			{
+				_map->getCamera()->scrollXY(dx, dy, true);
+			}
+
 			State::think();
 			_battleGame->think();
 			_animTimer->think(this, 0);
@@ -1668,6 +1681,21 @@ inline void BattlescapeState::handle(Action *action)
 				{
 					saveVoxelView();
 				}
+			}
+
+			if (action->getDetails()->type == SDL_KEYDOWN)
+			{
+				if (action->getDetails()->key.keysym.sym == Options::keyBattleUp) _keyScrollUp = true;
+				else if (action->getDetails()->key.keysym.sym == Options::keyBattleDown) _keyScrollDown = true;
+				else if (action->getDetails()->key.keysym.sym == Options::keyBattleLeft) _keyScrollLeft = true;
+				else if (action->getDetails()->key.keysym.sym == Options::keyBattleRight) _keyScrollRight = true;
+			}
+			else if (action->getDetails()->type == SDL_KEYUP)
+			{
+				if (action->getDetails()->key.keysym.sym == Options::keyBattleUp) _keyScrollUp = false;
+				else if (action->getDetails()->key.keysym.sym == Options::keyBattleDown) _keyScrollDown = false;
+				else if (action->getDetails()->key.keysym.sym == Options::keyBattleLeft) _keyScrollLeft = false;
+				else if (action->getDetails()->key.keysym.sym == Options::keyBattleRight) _keyScrollRight = false;
 			}
 		}
 	}
