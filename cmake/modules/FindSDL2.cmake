@@ -78,7 +78,7 @@
 FIND_PATH(SDL_INCLUDE_DIR SDL.h
   HINTS
   $ENV{SDLDIR}
-  PATH_SUFFIXES include/SDL include SDL
+  PATH_SUFFIXES include/SDL2 include/SDL include SDL
   PATHS
   ~/Library/Frameworks
   /Library/Frameworks
@@ -96,7 +96,7 @@ FIND_PATH(SDL_INCLUDE_DIR SDL.h
 # SDL-1.1 is the name used by FreeBSD ports...
 # don't confuse it for the version number.
 FIND_LIBRARY(SDL_LIBRARY_TEMP
-  NAMES SDL SDL-1.1
+  NAMES SDL SDL2 SDL-1.1
   HINTS
   $ENV{SDLDIR}
   PATH_SUFFIXES lib64 lib
@@ -186,21 +186,35 @@ ENDIF(SDL_LIBRARY_TEMP)
 macro ( find_sdl_version _header_file _COMPONENT_NAME _major _minor _micro )
   file ( READ ${_header_file} lines )
 
-  set ( define_base "SDL_${_COMPONENT_NAME}" )
+  # Support both SDL1- and SDL2-style version macros
   if ( "${_COMPONENT_NAME}" STREQUAL "" )
-    set ( define_base "SDL" )
+    set ( define_bases SDL SDL2 )
+  else ()
+    set ( define_bases SDL_${_COMPONENT_NAME} SDL2_${_COMPONENT_NAME} )
   endif ()
 
-  string ( REGEX MATCH "#define ${define_base}_MAJOR[A-Z|_]*[ |	]([0-9])" sdl_comp_version "${lines}" )
-  set ( ${_major} ${CMAKE_MATCH_1} )
-  string ( REGEX MATCH "#define ${define_base}_MINOR[A-Z|_]*[ |	]([0-9])" sdl_comp_version1 "${lines}" )
-  set ( ${_minor} ${CMAKE_MATCH_1} )
-  string ( REGEX MATCH "#define ${define_base}_PATCHLEVEL[ |	]*([0-9]*)" sdl_comp_version2 "${lines}" )
-  set ( ${_micro} ${CMAKE_MATCH_1} )
-  if ( "${${_micro}}" STREQUAL "" )
-    string ( REGEX MATCH "#define ${define_base}_MICRO[A-Z|_]*[ |	]*([0-9]*)" sdl_comp_version2 "${lines}" )
-    set ( ${_micro} ${CMAKE_MATCH_1} )
-  endif ()
+  set ( ${_major} "" )
+  set ( ${_minor} "" )
+  set ( ${_micro} "" )
+
+  foreach(define_base ${define_bases})
+    if ( "${${_major}}" STREQUAL "" )
+      string ( REGEX MATCH "#define ${define_base}_MAJOR[A-Z|_]*[ |	]*([0-9]+)" sdl_comp_version "${lines}" )
+      set ( ${_major} ${CMAKE_MATCH_1} )
+    endif ()
+    if ( "${${_minor}}" STREQUAL "" )
+      string ( REGEX MATCH "#define ${define_base}_MINOR[A-Z|_]*[ |	]*([0-9]+)" sdl_comp_version1 "${lines}" )
+      set ( ${_minor} ${CMAKE_MATCH_1} )
+    endif ()
+    if ( "${${_micro}}" STREQUAL "" )
+      string ( REGEX MATCH "#define ${define_base}_PATCHLEVEL[ |	]*([0-9]*)" sdl_comp_version2 "${lines}" )
+      set ( ${_micro} ${CMAKE_MATCH_1} )
+      if ( "${${_micro}}" STREQUAL "" )
+        string ( REGEX MATCH "#define ${define_base}_MICRO[A-Z|_]*[ |	]*([0-9]*)" sdl_comp_version2 "${lines}" )
+        set ( ${_micro} ${CMAKE_MATCH_1} )
+      endif ()
+    endif ()
+  endforeach()
 endmacro ()
 
 macro ( FindSDL_component _component )
@@ -211,7 +225,8 @@ macro ( FindSDL_component _component )
 
   #Special case for SDL_gfx. This seems to be the only library where the main header is not SDL_${lib}.h.
   if ( ${UPPERCOMPONENT} STREQUAL "GFX" )
-    set ( SDL_header_name SDL_gfxPrimitives.h )
+    # SDL2_gfx installs SDL2_gfxPrimitives.h on modern distros.
+    set ( SDL_header_name SDL2_gfxPrimitives.h SDL_gfxPrimitives.h )
     set ( SDL_COMPONENT_NAME GFXPRIMITIVES )
   endif ()
 
@@ -219,7 +234,7 @@ macro ( FindSDL_component _component )
     HINTS
     $ENV{SDL${UPPERCOMPONENT}DIR}
     $ENV{SDLDIR}
-    PATH_SUFFIXES include/SDL include SDL
+    PATH_SUFFIXES include/SDL2 include/SDL include SDL
     PATHS
     ~/Library/Frameworks
     /Library/Frameworks
@@ -233,7 +248,7 @@ macro ( FindSDL_component _component )
     /opt
     )
   find_library ( SDL${UPPERCOMPONENT}_LIBRARY
-    NAMES SDL_${_component}
+    NAMES SDL_${_component} SDL2_${_component}
     HINTS
     $ENV{SDL${UPPERCOMPONENT}DIR}
     $ENV{SDLDIR}
@@ -247,7 +262,12 @@ macro ( FindSDL_component _component )
 
   if ( SDL${UPPERCOMPONENT}_LIBRARY AND SDL${UPPERCOMPONENT}_INCLUDE_DIR )
     set ( SDL${UPPERCOMPONENT}_FOUND "YES" )
-    set ( SDL${UPPERCOMPONENT}_MAINHEADER "${SDL${UPPERCOMPONENT}_INCLUDE_DIR}/${SDL_header_name}" )
+    foreach(_sdl_header ${SDL_header_name})
+      if ( EXISTS "${SDL${UPPERCOMPONENT}_INCLUDE_DIR}/${_sdl_header}" )
+        set ( SDL${UPPERCOMPONENT}_MAINHEADER "${SDL${UPPERCOMPONENT}_INCLUDE_DIR}/${_sdl_header}" )
+        break()
+      endif ()
+    endforeach()
 
     find_sdl_version ( "${SDL${UPPERCOMPONENT}_MAINHEADER}"
       "${SDL_COMPONENT_NAME}"

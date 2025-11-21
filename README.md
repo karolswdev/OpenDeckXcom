@@ -176,3 +176,20 @@ It's also been tested on a variety of other tools on Windows/Mac/Linux. More
 detailed compiling instructions are available at the
 [wiki](https://ufopaedia.org/index.php/Compiling_(OpenXcom)), along with
 pre-compiled dependency packages.
+
+### Ubuntu quickstart (tested on 24.04)
+
+Copy/paste the following to install deps, configure, and build:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential cmake pkg-config \
+  libsdl1.2-dev libsdl-mixer1.2-dev libsdl-image1.2-dev libsdl-gfx1.2-dev \
+  libsdl2-dev libsdl2-mixer-dev libsdl2-image-dev libsdl2-gfx-dev \
+  libyaml-cpp-dev libgl1-mesa-dev libglu1-mesa-dev git
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDEV_BUILD=OFF
+cmake --build build -j$(nproc)
+```
+
+The resulting binary is at `bin/openxcom`. Make sure the original game data is placed in one of the expected data folders (see above) before running `./bin/openxcom`.

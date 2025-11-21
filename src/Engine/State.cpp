@@ -19,6 +19,7 @@
 #include "State.h"
 #include <climits>
 #include <cmath>
+#include "Action.h"
 #include "InteractiveSurface.h"
 #include "Game.h"
 #include "Screen.h"
